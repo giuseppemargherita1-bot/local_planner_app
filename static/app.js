@@ -2482,6 +2482,9 @@ function selectTarget(target, resourceId = null) {
       plannerSideToggle.setAttribute("aria-label", plannerSideToggle.title);
     }
   }
+  plannerGrid?.classList.add("side-active");
+  console.log("selectedTarget", selectedTarget);
+  console.log("week", selectedTarget?.week);
   const baseWeek = target.week_from ?? target.week ?? "";
   const demandQtyForTarget = state.demands.reduce((acc, d) => {
     const meta = plannerProjectMeta(d.project_id, d.project);
@@ -2498,9 +2501,21 @@ function selectTarget(target, resourceId = null) {
   demandWeekTo.value = target.week_to ?? target.week ?? "";
   demandQty.value = String(demandQtyForTarget);
   selectionInfo.textContent = `${target.project} | ${target.role} | W${target.week_from ?? target.week} - W${target.week_to ?? target.week}`;
-  renderAssignResourceOptions(resourceId);
-  renderSelectionAllocations();
-  renderResourcePool();
+  try {
+    renderAssignResourceOptions(resourceId);
+    renderSelectionAllocations();
+    renderResourcePool();
+  } catch (err) {
+    console.error("selectTarget panel render error", err);
+    setStatus(`Errore pannello laterale: ${err.message || err}`);
+  }
+  window.requestAnimationFrame(() => {
+    try {
+      renderAssignResourceOptions(resourceId);
+    } catch (err) {
+      console.error("selectTarget delayed options error", err);
+    }
+  });
 }
 
 function renderPlannerMatrix() {
@@ -2668,14 +2683,26 @@ function resourceCardClass(resource, selectedWeekFrom = null, selectedWeekTo = n
 }
 
 function renderAssignResourceOptions(preselectedId = null) {
+  if (!assignResource) return;
   updateAssignModeUi();
-  const useExt = usingExternalAssignMode();
+  let useExt = usingExternalAssignMode();
   const role = assignRole.value.trim();
   const wf = parseWeek(assignWeekFrom.value);
   const wt = parseWeek(assignWeekTo.value);
-  const scopeResources = useExt
+  const baseWeek = selectedTarget?.week_from ?? selectedTarget?.week ?? null;
+  const weekFrom = wf ?? baseWeek;
+  const weekTo = wt ?? weekFrom;
+  let scopeResources = useExt
     ? extResourcesForRole(role)
     : state.resources.filter((r) => !isExternalResource(r));
+  if (useExt && scopeResources.length === 0) {
+    useExt = false;
+    if (assignUseExternal) assignUseExternal.checked = false;
+    updateAssignModeUi();
+    scopeResources = state.resources.filter((r) => !isExternalResource(r));
+  }
+  console.log("renderAssignResourceOptions selectedTarget", selectedTarget);
+  console.log("renderAssignResourceOptions week", weekFrom ?? null);
   const selectedSet = new Set(
     (preselectedId !== null && preselectedId !== undefined ? [preselectedId] : selectedAssignResourceIds()).map((id) =>
       Number(id)
@@ -2683,9 +2710,6 @@ function renderAssignResourceOptions(preselectedId = null) {
   );
   const options = scopeResources
     .map((r) => {
-      const baseWeek = selectedTarget?.week_from ?? selectedTarget?.week ?? null;
-      const weekFrom = wf ?? baseWeek;
-      const weekTo = wt ?? weekFrom;
       const hasRange = weekFrom !== null && weekTo !== null;
       const conflict = hasRange ? allocationConflict(r.id, weekFrom, weekTo) : [];
       const unavailable = hasRange ? unavailabilityConflict(r.id, weekFrom, weekTo) : [];
