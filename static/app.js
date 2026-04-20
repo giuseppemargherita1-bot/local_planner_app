@@ -1059,19 +1059,33 @@ function createCustomOverall(name, projectCodes) {
 
 function getOwningOverall(projectCode) {
   const code = normalizeProjectCode(projectCode);
-  const overalls = Object.values(state.overalls || {});
-  return overalls.find((o) =>
-    (o.project_codes || []).some((p) => normalizeProjectCode(p) === code)
-  ) || null;
+  if (!code) return null;
+  const overalls = Array.isArray(state.overalls) ? state.overalls : Object.values(state.overalls || {});
+  for (const overall of overalls) {
+    const projects = Array.isArray(overall?.projects)
+      ? overall.projects
+      : Array.isArray(overall?.project_codes)
+      ? overall.project_codes
+      : [];
+    const ownsProject = projects.some((p) => normalizeProjectCode(p) === code);
+    if (!ownsProject) continue;
+    const overallCode = normalizeProjectCode(overall?.code || overall?.id || overall?.name || "");
+    return {
+      ...overall,
+      code: overallCode || String(overall?.code || overall?.id || overall?.name || "").trim(),
+    };
+  }
+  return null;
 }
 
 function isAllocableProjectCode(projectCode) {
   const code = normalizeProjectCode(projectCode);
   if (!code) return false;
   if (isOverallProjectCode(code)) return true;
-  const owner = getOwningOverall(code);
-  if (!owner) return true;
-  return false;
+  const owning = getOwningOverall(code);
+  if (!owning) return true;
+  const owningCode = normalizeProjectCode(owning?.code || owning?.id || owning?.name || "");
+  return owningCode === code;
 }
 
 function allocationEffectiveWeightForWeek(allocation, week) {
@@ -1807,8 +1821,9 @@ async function saveGanttActionModal() {
       if (!project) throw new Error("Commessa non trovata.");
       const owner = getOwningOverall(project.code);
       if (!isAllocableProjectCode(project.code)) {
-        const ownerName = owner?.name || owner?.id || "OVERALL";
-        throw new Error(`La commessa ${project.code} è gestita da ${ownerName}; alloca su ${ownerName}`);
+        const ownerCode = String(owner?.code || owner?.id || owner?.name || "OVERALL").trim();
+        alert(`La commessa ${project.code} è gestita da ${ownerCode}; alloca su ${ownerCode}`);
+        return;
       }
       let role = ganttRoleSelect.value.trim() || resource.role1 || "";
       if (!role) throw new Error("Seleziona una mansione.");
@@ -5238,8 +5253,10 @@ async function saveAssignment({ project_id, project, role, resource_id, week_fro
   const projectCode = String(project || "").trim();
   const owner = getOwningOverall(projectCode);
   if (!isAllocableProjectCode(projectCode)) {
-    const ownerName = owner?.name || owner?.id || "OVERALL";
-    throw new Error(`La commessa ${projectCode} è gestita da ${ownerName}; alloca su ${ownerName}`);
+    const ownerCode = String(owner?.code || owner?.id || owner?.name || "OVERALL").trim();
+    const message = `La commessa ${projectCode} è gestita da ${ownerCode}; alloca su ${ownerCode}`;
+    alert(message);
+    throw new Error(message);
   }
   const projectRow = state.projects.find((p) => normalizeProjectCode(p.code) === normalizeProjectCode(projectCode));
   if (isOverallProjectCode(projectCode) && !projectRow) {
