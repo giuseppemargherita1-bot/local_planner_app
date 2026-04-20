@@ -1,4 +1,3 @@
-// test git vscode
 const statusText = document.getElementById("statusText");
 const undoBtn = document.getElementById("undoBtn");
 const refreshBtn = document.getElementById("refreshBtn");
