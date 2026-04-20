@@ -2682,6 +2682,7 @@ function updateAssignModeUi() {
 }
 
 function resourceCardClass(resource, selectedWeekFrom = null, selectedWeekTo = null, role = "") {
+  if (isExternalResource(resource)) return "external";
   const weekFrom = selectedWeekFrom ?? null;
   const weekTo = selectedWeekTo ?? selectedWeekFrom ?? null;
   const hasRange = weekFrom !== null && weekTo !== null;
@@ -2691,10 +2692,10 @@ function resourceCardClass(resource, selectedWeekFrom = null, selectedWeekTo = n
   if (!resourceActive(resource, hasRange ? weekFrom : null)) return "inactive";
   if (unavailable.length > 0) return "unavailable";
   if (role && !roleMatches(resource, role)) return "off-role";
-  if (isExternalResource(resource)) return "external";
-  if (conflicts.length >= 2) return "busy";
-  if (conflicts.length === 1) return "partial";
-  return "free";
+  if (conflicts.length === 0) return "free";
+  if (conflicts.length === 1) return "busy";
+  if (conflicts.length === 2) return "partial";
+  return "busy";
 }
 
 function renderAssignResourceOptions(preselectedId = null) {
@@ -2725,38 +2726,39 @@ function renderAssignResourceOptions(preselectedId = null) {
   );
   const options = scopeResources
     .map((r) => {
+      const isExt = isExternalResource(r);
       const hasRange = weekFrom !== null && weekTo !== null;
-      const conflict = hasRange ? allocationConflict(r.id, weekFrom, weekTo) : [];
+      const conflict = hasRange && !isExt ? allocationConflict(r.id, weekFrom, weekTo) : [];
       const unavailable = hasRange ? unavailabilityConflict(r.id, weekFrom, weekTo) : [];
       const hasRole = resourceHasAnyRole(r);
       const roleOk = !role || roleMatches(r, role);
       const active = resourceActive(r, hasRange ? weekFrom : null);
       const labels = [];
+      if (isExt) labels.push("EXT 1:1");
       if (!hasRole) labels.push("mansione mancante");
       if (!roleOk) labels.push("fuori mansione");
       if (!active) labels.push("non attivo");
       if (unavailable.length > 0) labels.push("INDISP");
-      if (!isExternalResource(r) && conflict.length >= 2) labels.push("occupato");
-      if (!isExternalResource(r) && conflict.length === 1) labels.push("parziale 0,5");
+      if (!isExt && conflict.length === 1) labels.push("occupato");
+      if (!isExt && conflict.length === 2) labels.push("doppia allocazione");
       const suffix = labels.length ? ` | ${labels.join(", ")}` : "";
       const sel = selectedSet.has(Number(r.id)) ? "selected" : "";
-      const extTag = isExternalResource(r) ? " | EXT 1:1" : "";
       let optionColor = "#111a2a";
       let optionWeight = "700";
       if (!active) {
         optionColor = "#8a94a8";
         optionWeight = "500";
-      } else if (unavailable.length > 0 || (!isExternalResource(r) && conflict.length >= 2)) {
+      } else if (unavailable.length > 0 || (!isExt && (conflict.length === 1 || conflict.length > 2))) {
         optionColor = "#b42318";
         optionWeight = "700";
-      } else if (!isExternalResource(r) && conflict.length === 1) {
+      } else if (!isExt && conflict.length === 2) {
         optionColor = "#b26b00";
         optionWeight = "700";
-      } else if (isExternalResource(r)) {
+      } else if (isExt) {
         optionColor = "#1f7fd6";
         optionWeight = "700";
       }
-      return `<option value="${r.id}" ${sel} style="color:${optionColor};font-weight:${optionWeight};">${escapeHtml(r.name)} | ${escapeHtml(r.role1 || "")}${escapeHtml(extTag)}${escapeHtml(suffix)}</option>`;
+      return `<option value="${r.id}" ${sel} style="color:${optionColor};font-weight:${optionWeight};">${escapeHtml(r.name)} | ${escapeHtml(r.role1 || "")}${escapeHtml(suffix)}</option>`;
     })
     .join("");
   assignResource.innerHTML = options || `<option value="">Nessuna risorsa disponibile</option>`;
