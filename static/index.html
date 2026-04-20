@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Manpower Planner</title>
+  <link rel="stylesheet" href="https://unpkg.com/vis-timeline@7.7.0/styles/vis-timeline-graph2d.min.css" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Manpower Planner</h1>
+      <div class="subtitle">Pianificazione risorse per commessa, settimana e mansione</div>
+    </div>
+    <div class="top-actions">
+      <button id="undoBtn" class="secondary-btn" title="Annulla ultima modifica (Ctrl+Z)" disabled>Annulla</button>
+      <button id="activityLogBtn" class="secondary-btn">Log</button>
+      <button id="restoreBackupBtn" class="secondary-btn">Ripristina ultimo</button>
+      <button id="importDemandsBtn" class="secondary-btn">Importa fabbisogno</button>
+      <button id="importPlanningBtn" class="secondary-btn">Import iniziale</button>
+      <button id="refreshBtn">Aggiorna</button>
+      <span id="statusText">Pronto</span>
+    </div>
+  </header>
+
+  <main class="content-full">
+    <nav class="sheet-tabs">
+      <button class="sheet-btn active" data-sheet="planner">Planner</button>
+      <button class="sheet-btn" data-sheet="commesse">Commesse</button>
+      <button class="sheet-btn" data-sheet="risorse">Risorse</button>
+      <button class="sheet-btn" data-sheet="gantt">Gantt</button>
+      <button class="sheet-btn" data-sheet="report">Report</button>
+    </nav>
+
+    <section class="sheet-panel active" id="sheet-planner">
+      <section class="summary-grid">
+        <article class="summary-card">
+          <div class="summary-label">Fabbisogno totale</div>
+          <div class="summary-value" id="summaryDemand">0</div>
+        </article>
+        <article class="summary-card">
+          <div class="summary-label">Risorse allocate</div>
+          <div class="summary-value" id="summaryAllocated">0</div>
+        </article>
+        <article class="summary-card danger">
+          <div class="summary-label">Residuo da coprire</div>
+          <div class="summary-value" id="summaryResidual">0</div>
+        </article>
+        <article class="summary-card">
+          <div class="summary-label">Risorse attive</div>
+          <div class="summary-value" id="summaryResources">0</div>
+        </article>
+      </section>
+
+      <section class="card source-card">
+        <div class="card-head">
+          <h2>Fonte Fabbisogno</h2>
+          <button id="openDemandSourceBtn" class="secondary-btn">Apri file sorgente</button>
+        </div>
+        <div id="demandSourcePath" class="source-path"></div>
+      </section>
+
+      <section class="planner-grid">
+        <section class="card">
+          <div class="card-head">
+            <h2>Planner Fabbisogno</h2>
+            <div class="planner-actions">
+              <button id="printPlannerBtn" class="secondary-btn">Stampa planner</button>
+              <label class="toggle-inline">
+                <input id="showZeroDemandProjects" type="checkbox" />
+                <span>Mostra commesse senza fabbisogno</span>
+              </label>
+              <select id="plannerProjectFilter">
+                <option value="">Tutte le commesse</option>
+              </select>
+              <select id="plannerRoleFilter">
+                <option value="">Tutte le mansioni</option>
+              </select>
+            </div>
+          </div>
+          <div class="hint">Ogni cella mostra <strong>R</strong> richiesto, <strong>A</strong> allocato, <strong>D</strong> differenza. Clicca una cella per preparare l'assegnazione o trascina una risorsa sopra la settimana.</div>
+          <div id="plannerHiddenNotice" class="planner-notice" hidden></div>
+          <div class="table-wrap planner-wrap">
+            <table id="plannerMatrix">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <section id="workshopBreakdownSection" class="workshop-breakdown-section" hidden>
+            <h3 class="subheading">Dettaglio OVERALL OFFICINA</h3>
+            <div id="workshopBreakdownBox" class="selection-list workshop-breakdown-list"></div>
+          </section>
+        </section>
+
+        <section class="card side-card" id="plannerSideCard">
+          <button id="plannerSideToggle" class="side-toggle" title="Nascondi pannello laterale" aria-label="Nascondi pannello laterale">›</button>
+          <div class="card-head" id="assignCardDragHandle">
+            <h2>Assegnazione Rapida</h2>
+            <button id="expandAssignBtn" class="secondary-btn">Ingrandisci</button>
+          </div>
+          <div id="selectionInfo" class="selection-box">Seleziona una cella del planner.</div>
+          <h3 class="subheading">Fabbisogno</h3>
+          <div class="form-grid">
+            <label>
+              <span>Richiesto</span>
+              <input id="demandQty" type="number" min="0" />
+            </label>
+            <label>
+              <span>Applica da</span>
+              <input id="demandWeekFrom" type="number" min="1" max="52" />
+            </label>
+            <label>
+              <span>Applica a</span>
+              <input id="demandWeekTo" type="number" min="1" max="52" />
+            </label>
+          </div>
+          <div class="inline-actions">
+            <button id="demandSaveBtn">Salva fabbisogno</button>
+          </div>
+          <div class="form-grid">
+            <label>
+              <span>Commessa</span>
+              <input id="assignProject" readonly />
+            </label>
+            <label>
+              <span>Mansione</span>
+              <input id="assignRole" readonly />
+            </label>
+            <label>
+              <span>Week da</span>
+              <input id="assignWeekFrom" type="number" min="1" max="52" />
+            </label>
+            <label>
+              <span>Week a</span>
+              <input id="assignWeekTo" type="number" min="1" max="52" />
+            </label>
+            <label class="toggle-inline full">
+              <input id="assignUseExternal" type="checkbox" />
+              <span>Usa risorse EXT</span>
+            </label>
+            <label>
+              <span>Quantità EXT</span>
+              <input id="assignExternalQty" type="number" min="1" value="1" />
+            </label>
+            <label class="full">
+              <span>Risorsa</span>
+              <select id="assignResource" multiple size="8"></select>
+            </label>
+          </div>
+          <div class="inline-actions">
+            <button id="assignSaveBtn">Assegna periodo</button>
+            <button id="markUnavailableBtn" class="secondary-btn">Segna INDISP</button>
+            <button id="assignClearBtn" class="secondary-btn">Pulisci</button>
+          </div>
+          <div class="hint">Tieni premuto <strong>Ctrl</strong> per selezionare piu risorse dal menu. Con <strong>Usa risorse EXT</strong> scegli periodo + quantita': il sistema usa solo le risorse <code>-EXT</code> della mansione selezionata.</div>
+
+          <div id="resourcePoolSection" hidden>
+            <h3 class="subheading">Elenco Risorse</h3>
+            <div class="resource-toolbar">
+              <input id="resourceSearch" placeholder="Cerca risorsa" />
+            </div>
+            <div id="resourcePool" class="resource-pool"></div>
+          </div>
+
+          <h3 class="subheading">Allocazioni Selezionate</h3>
+          <div id="selectionAllocations" class="selection-list" tabindex="0"></div>
+        </section>
+      </section>
+    </section>
+
+    <div id="importPreviewModal" class="modal-overlay" hidden>
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">Anteprima import fabbisogno</div>
+          <button class="modal-close" id="importPreviewClose">Chiudi</button>
+        </div>
+        <pre id="importPreviewText" class="modal-pre"></pre>
+        <div id="importUnknownRoles" class="import-unknown-roles" hidden>
+          <div class="import-unknown-title">Mansioni non riconosciute</div>
+          <div class="import-unknown-subtitle">Decidi se creare una nuova mansione o mapparla a una esistente.</div>
+          <div id="importUnknownRolesList" class="import-unknown-list"></div>
+        </div>
+      <div class="modal-actions">
+        <button class="secondary-btn" id="importPreviewCancel">Annulla</button>
+        <button class="primary-btn" id="importPreviewConfirm">Importa</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="activityLogModal" class="modal-overlay" hidden>
+    <div class="modal-card modal-wide">
+      <div class="modal-header">
+        <div class="modal-title">Registro attività</div>
+        <button class="modal-close" id="activityLogClose">Chiudi</button>
+      </div>
+      <div class="log-table-wrap">
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th>Data/Ora</th>
+              <th>Chi</th>
+              <th>Azione</th>
+              <th>Dettaglio</th>
+            </tr>
+          </thead>
+          <tbody id="activityLogBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <section class="sheet-panel" id="sheet-commesse">
+      <section class="card">
+        <div class="card-head">
+          <h2>Gestione Commesse e Fabbisogno</h2>
+        </div>
+        <div class="hint">Qui puoi aggiungere o modificare commesse e correggere rapidamente il fabbisogno senza passare dal file Excel del collega.</div>
+        <div class="project-admin-toolbar">
+          <input id="projectAdminSearch" placeholder="Cerca commessa" />
+          <button id="projectAdminNewBtn" class="secondary-btn">Nuova commessa</button>
+          <button id="projectAdminSaveBtn">Salva commessa</button>
+          <button id="projectDemandSaveBtn" class="secondary-btn">Salva fabbisogno visibile</button>
+        </div>
+        <div class="project-admin-grid">
+          <section class="project-admin-list">
+            <table id="projectsAdminTable">
+              <thead>
+                <tr>
+                  <th>Commessa</th>
+                  <th>Tipo</th>
+                  <th>Chiusa</th>
+                  <th>Rollup Off.</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </section>
+          <section class="project-admin-detail">
+            <div class="form-grid">
+              <label>
+                <span>Codice commessa</span>
+                <input id="projectCodeInput" />
+              </label>
+              <label>
+                <span>Attivita'</span>
+                <input id="projectActivityInput" />
+              </label>
+              <label>
+                <span>Tipo</span>
+                <select id="projectTypeInput">
+                  <option value="SITE">SITE</option>
+                  <option value="WS">WS</option>
+                </select>
+              </label>
+              <label class="toggle-inline">
+                <input id="projectClosedInput" type="checkbox" />
+                <span>Commessa chiusa</span>
+              </label>
+              <label class="toggle-inline">
+                <input id="projectWorkshopRollupInput" type="checkbox" />
+                <span>In OVERALL OFFICINA</span>
+              </label>
+            </div>
+            <div class="inline-actions">
+              <label class="full">
+                <span>Nuova mansione riga</span>
+                <input id="projectDemandRoleInput" list="roleList" placeholder="Es. GENERICO" />
+              </label>
+              <button id="projectDemandAddRoleBtn" class="secondary-btn">Aggiungi riga mansione</button>
+            </div>
+            <div class="table-wrap project-demand-wrap">
+              <table id="projectDemandMatrix">
+                <thead></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+    </section>
+
+    <section class="sheet-panel" id="sheet-risorse">
+      <section class="card">
+        <div class="card-head">
+          <h2>Anagrafica Risorse</h2>
+          <button id="printResourcesBtn" class="secondary-btn">Stampa risorse</button>
+        </div>
+        <div class="hint">Questa pagina sostituisce l'elenco Excel: qui puoi gestire anagrafica, ruolo, contatti, sede, certificazioni e note operative.</div>
+        <div class="resource-filters">
+          <input id="resourceTableSearch" placeholder="Cerca nome o codice" />
+          <select id="resourceRoleFilter">
+            <option value="">Tutte le mansioni</option>
+          </select>
+          <select id="resourceStatusFilter">
+            <option value="">Tutti gli stati</option>
+            <option value="ATTIVO">Solo attivi</option>
+            <option value="CESSATO">Solo cessati</option>
+          </select>
+        <select id="resourceSortBy">
+          <option value="name_asc">Ordina: nome A-Z</option>
+          <option value="name_desc">Ordina: nome Z-A</option>
+          <option value="role_asc">Ordina: mansione A-Z</option>
+          <option value="end_asc">Ordina: fine piu vicina</option>
+          <option value="end_desc">Ordina: fine piu lontana</option>
+        </select>
+        <div class="resource-columns-wrap">
+          <button id="resourceColumnsBtn" class="secondary-btn" type="button">Colonne</button>
+          <div id="resourceColumnsPanel" class="resource-columns-panel hidden"></div>
+        </div>
+        <button id="resourceSaveAllBtn">Salva modifiche</button>
+      </div>
+        <div class="table-wrap resources-wrap">
+          <table id="resourcesTable">
+            <colgroup>
+              <col data-col="0" />
+              <col data-col="1" />
+              <col data-col="2" />
+              <col data-col="3" />
+              <col data-col="4" />
+              <col data-col="5" />
+              <col data-col="6" />
+              <col data-col="7" />
+              <col data-col="8" />
+              <col data-col="9" />
+              <col data-col="10" />
+              <col data-col="11" />
+              <col data-col="12" />
+              <col data-col="13" />
+              <col data-col="14" />
+              <col data-col="15" />
+              <col data-col="16" />
+              <col data-col="17" />
+              <col data-col="18" />
+              <col data-col="19" />
+              <col data-col="20" />
+              <col data-col="21" />
+              <col data-col="22" />
+              <col data-col="23" />
+              <col data-col="24" />
+              <col data-col="25" />
+              <col data-col="26" />
+              <col data-col="27" />
+              <col data-col="28" />
+              <col data-col="29" />
+              <col data-col="30" />
+              </colgroup>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Codice</th>
+                <th>Risorsa</th>
+                <th>Mansione 1</th>
+                <th>Mansione 2</th>
+                <th>Assunzione</th>
+                <th>Fine</th>
+                <th>Data nascita</th>
+                <th>Telefono</th>
+                <th>Comune res.</th>
+                <th>Datore lavoro</th>
+                <th>Livello ass.</th>
+                <th>Tipo</th>
+                <th>€/h straord</th>
+                <th>€/G Pres. Off</th>
+                <th>€/G Pres. Cant</th>
+                <th>PB +FISSO</th>
+                <th>€/h Off.</th>
+                <th>€/h Cant.</th>
+                <th>GLOB +FISSO</th>
+                <th>Tipo DOC</th>
+                <th>Numero DOC</th>
+                <th>Scadenza DOC</th>
+                <th>Email</th>
+                <th>Sede</th>
+                <th>Livello</th>
+                <th>Certificazioni</th>
+                <th>No trasferta</th>
+                <th>Note operative</th>
+                <th>Stato</th>
+                <th>Azione</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <section class="sheet-panel" id="sheet-gantt">
+      <section class="card gantt-card" id="ganttCard">
+        <div class="card-head" id="ganttCardDragHandle">
+          <h2>Gantt Risorse</h2>
+          <button id="expandGanttBtn" class="secondary-btn">Ingrandisci</button>
+          <label class="gantt-ext-toggle">
+            <input type="checkbox" id="ganttShowExternalDetail" />
+            <span>Mostra dettaglio external</span>
+          </label>
+          <button id="printGanttBtn" class="secondary-btn">Stampa Gantt</button>
+          <div class="legend">
+            <span class="pill normal">Commessa</span>
+            <span class="pill available">Disponibile</span>
+            <span class="pill indisp">INDISP</span>
+            <span class="pill overlap">Sovrapp.</span>
+            <span class="pill contract">Contratto</span>
+            <span class="pill ended">Cessato</span>
+          </div>
+        </div>
+        <div class="hint">Ogni riga rappresenta una risorsa. Il colore della barra identifica la commessa.</div>
+        <div class="gantt-split gantt-container" id="ganttSplit">
+          <div class="gantt-top-pane gantt-top">
+            <div id="timeline"></div>
+          </div>
+          <button
+            id="ganttSplitHandle"
+            class="gantt-split-handle gantt-resizer"
+            type="button"
+            title="Trascina per regolare la vista divisa"
+            aria-label="Trascina per regolare la vista divisa"
+          >
+            <span class="gantt-split-grip" aria-hidden="true"></span>
+          </button>
+          <div class="gantt-bottom-pane gantt-bottom">
+            <section class="gantt-demand-panel">
+              <div class="mini-card-head">
+                <h3>Planner Fabbisogno</h3>
+              </div>
+              <div class="resource-toolbar">
+                <select id="ganttDemandProjectFilter">
+                  <option value="">Tutte le commesse</option>
+                </select>
+                <select id="ganttDemandRoleFilter">
+                  <option value="">Tutte le mansioni</option>
+                </select>
+              </div>
+              <div class="table-wrap gantt-demand-wrap">
+                <table id="ganttDemandMatrix">
+                  <thead></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section class="sheet-panel" id="sheet-report">
+      <section class="card report-dashboard-card">
+        <div class="report-dashboard-head">
+          <div>
+            <h2>Report</h2>
+            <div class="hint">Dashboard sintetica con drill-down: i primi 3 blocchi sono i report base, l'ultimo serve per costruire insight personalizzati.</div>
+          </div>
+          <div class="report-mode-toggle" role="group" aria-label="Modalita fabbisogno">
+            <button id="reportModeRequestedBtn" class="secondary-btn">FABB. DA RICHIESTA</button>
+            <button id="reportModeRealBtn" class="secondary-btn active">FABB. REALE</button>
+          </div>
+        </div>
+
+        <div class="report-filter-strip">
+          <label>
+            <span>Week da</span>
+            <input id="reportWeekFrom" type="number" min="1" max="52" />
+          </label>
+          <label>
+            <span>Week a</span>
+            <input id="reportWeekTo" type="number" min="1" max="52" />
+          </label>
+          <label>
+            <span>Scala</span>
+            <select id="reportScale">
+              <option value="1W">1 WEEK</option>
+              <option value="2W">2 WEEK</option>
+              <option value="1M">1 MESE</option>
+              <option value="3M">3 MESI</option>
+            </select>
+          </label>
+          <label>
+            <span>Vista aggregata</span>
+            <select id="reportAggregateScope">
+              <option value="">Nessuna</option>
+              <option value="OVERALL_CANTIERI">OVERALL CANTIERI</option>
+              <option value="OVERALL_GENERALE">OVERALL GENERALE AZIENDA</option>
+            </select>
+          </label>
+          <label>
+            <span>Commessa</span>
+            <select id="reportProjectFilter">
+              <option value="">Tutte le commesse</option>
+            </select>
+          </label>
+          <label>
+            <span>Mansione</span>
+            <select id="reportRoleFilter">
+              <option value="">Tutte le mansioni</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="report-overview-grid report-overview-grid-top">
+          <button id="reportIndicatorAllocation" class="report-meter-card report-overview-card" data-report-card="workforce_alloc_meter">
+            <div class="report-meter-label">Allocazione personale</div>
+            <div class="report-meter-gauge"><div id="reportIndicatorAllocationFill" class="report-meter-fill"></div></div>
+            <div id="reportIndicatorAllocationValue" class="report-meter-value">0%</div>
+            <div id="reportIndicatorAllocationDetail" class="report-meter-detail">0 / 0</div>
+          </button>
+          <button id="reportIndicatorCoverage" class="report-meter-card report-overview-card" data-report-card="coverage_meter">
+            <div class="report-meter-label">Copertura mansioni</div>
+            <div class="report-meter-gauge negative"><div id="reportIndicatorCoverageFill" class="report-meter-fill"></div></div>
+            <div id="reportIndicatorCoverageValue" class="report-meter-value">0%</div>
+            <div id="reportIndicatorCoverageDetail" class="report-meter-detail">0 mancanti su 0</div>
+          </button>
+        </div>
+
+        <div class="report-overview-grid report-overview-grid-main">
+          <button id="reportDemandOverviewCard" class="report-view-card report-overview-card active" data-report-card="demand_allocated">
+            <span class="report-view-title">Fabbisogno / Allocazioni</span>
+            <span id="reportDemandOverviewSubtitle" class="report-view-desc"></span>
+            <div id="reportDemandOverviewLegend" class="report-legend report-legend-inline"></div>
+            <div id="reportDemandOverview" class="report-overview-canvas"></div>
+          </button>
+
+          <button id="reportDemandRoleOverviewCard" class="report-view-card report-overview-card" data-report-card="demand_allocated_role">
+            <span class="report-view-title">Fabbisogno / Allocazioni per Mansione</span>
+            <span id="reportDemandRoleOverviewSubtitle" class="report-view-desc"></span>
+            <div id="reportDemandRoleOverviewLegend" class="report-legend report-legend-inline"></div>
+            <div id="reportDemandRoleOverview" class="report-overview-canvas"></div>
+          </button>
+
+          <button id="reportUtilizationOverviewCard" class="report-view-card report-overview-card" data-report-card="workforce_utilization">
+            <span class="report-view-title">Utilizzo Personale in Forza</span>
+            <span id="reportUtilizationOverviewSubtitle" class="report-view-desc"></span>
+            <div id="reportUtilizationOverviewLegend" class="report-legend report-legend-inline"></div>
+            <div id="reportUtilizationOverview" class="report-overview-canvas"></div>
+          </button>
+
+          <button id="reportCustomInsightOpen" class="report-view-card report-overview-card report-custom-overview-card" data-report-card="custom_insight">
+            <span class="report-view-title">Crea Insight Personalizzato</span>
+            <span class="report-view-desc">Apri la vista avanzata per costruire pivot grafici e salvare insight personalizzati.</span>
+            <div class="report-custom-overview-meta">
+              <div class="report-custom-pill">Vista avanzata</div>
+              <div id="reportCustomOverviewSaved" class="report-custom-pill muted">0 viste salvate</div>
+            </div>
+            <div class="report-custom-overview-body">
+              <div class="report-custom-overview-line">Grafici pivot</div>
+              <div class="report-custom-overview-line">Filtri, drill-down, export</div>
+              <div class="report-custom-overview-line">Insight salvabili</div>
+            </div>
+          </button>
+        </div>
+
+        <section id="reportCustomPanel" class="report-custom-panel" hidden>
+          <div class="report-custom-head">
+            <h3>Insight Personalizzato</h3>
+            <div class="report-builder-actions">
+              <button id="reportPreviewBtn" class="secondary-btn">Anteprima</button>
+              <button id="reportSaveViewBtn" class="secondary-btn">Salva vista</button>
+            </div>
+          </div>
+          <div class="report-custom-grid">
+            <section class="report-panel">
+              <h3>Tipo grafico</h3>
+              <div class="form-grid compact-grid">
+                <label>
+                  <span>Tipo</span>
+                  <select id="reportChartType">
+                    <option value="stacked-demand">Colonne fabbisogno vs allocato</option>
+                    <option value="utilization">Colonne utilizzo forza lavoro</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+            <section class="report-panel">
+              <h3>Viste salvate</h3>
+              <div id="savedReportViews" class="report-saved-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="reportDetailArea" class="report-preview-area" hidden>
+          <div class="report-preview-head">
+            <div>
+              <div id="reportPreviewTitle" class="report-preview-title">Fabbisogno / Allocazioni</div>
+              <div id="reportPreviewSubtitle" class="report-preview-subtitle"></div>
+            </div>
+            <div id="reportLegend" class="report-legend"></div>
+          </div>
+          <div id="reportPreview" class="report-preview-canvas"></div>
+          <div id="reportSummaryCards" class="report-summary-cards"></div>
+        </section>
+      </section>
+    </section>
+  </main>
+
+  <datalist id="roleList"></datalist>
+
+  <div id="ganttActionModal" class="modal-shell" hidden>
+    <div class="modal-backdrop" data-modal-close="ganttActionModal"></div>
+    <section class="modal-card" id="ganttActionCard">
+      <div class="card-head modal-drag-handle" id="ganttActionDragHandle">
+        <h2>Azione Gantt</h2>
+        <button id="ganttActionCloseBtn" class="secondary-btn">Chiudi</button>
+      </div>
+      <div id="ganttActionInfo" class="hint"></div>
+      <div class="form-grid">
+        <label>
+          <span>Commessa</span>
+          <select id="ganttProjectSelect"></select>
+        </label>
+        <label>
+          <span>Mansione</span>
+          <select id="ganttRoleSelect"></select>
+        </label>
+        <label>
+          <span>Week da</span>
+          <input id="ganttWeekFromInput" type="number" min="1" max="52" />
+        </label>
+        <label>
+          <span>Week a</span>
+          <input id="ganttWeekToInput" type="number" min="1" max="52" />
+        </label>
+      </div>
+      <div id="ganttConflictBox" class="selection-list modal-conflicts"></div>
+      <div class="inline-actions">
+        <button id="ganttActionDeleteBtn" class="secondary-btn danger-btn" hidden>Elimina INDISP</button>
+        <button id="ganttActionUnassignBtn" class="secondary-btn danger-btn">Svincola periodo</button>
+        <button id="ganttActionSaveBtn">Salva</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="plannerPrintModal" class="modal-shell" hidden>
+    <div class="modal-backdrop" data-modal-close="plannerPrintModal"></div>
+    <section class="modal-card">
+      <div class="card-head">
+        <h2>Stampa Planner</h2>
+        <button id="plannerPrintCloseBtn" class="secondary-btn">Chiudi</button>
+      </div>
+      <div class="form-grid">
+        <label>
+          <span>Week da</span>
+          <input id="plannerPrintWeekFrom" type="number" min="1" max="52" />
+        </label>
+        <label>
+          <span>Week a</span>
+          <input id="plannerPrintWeekTo" type="number" min="1" max="52" />
+        </label>
+      </div>
+      <label id="plannerPrintWorkshopWrap" class="toggle-inline" hidden>
+        <input id="plannerPrintIncludeWorkshop" type="checkbox" />
+        <span>Includi anche le sottocommesse officina</span>
+      </label>
+      <div class="inline-actions">
+        <button id="plannerPrintRunBtn">Stampa</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="https://unpkg.com/vis-data@7.1.9/peer/umd/vis-data.min.js"></script>
+  <script src="https://unpkg.com/vis-timeline@7.7.0/peer/umd/vis-timeline-graph2d.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

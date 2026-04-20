@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="430" viewBox="0 0 1100 430">
+<style>text{font-family:Segoe UI,Arial,sans-serif} .title{font-size:22px;font-weight:700;fill:#1b2b42} .sub{font-size:12px;fill:#607089} .axis{stroke:#9aa9bc;stroke-width:1} .grid{stroke:#e5ecf5;stroke-width:1} .label{font-size:12px;fill:#30435f} .small{font-size:11px;fill:#607089} .legend{font-size:12px;fill:#30435f} .box{fill:#fff;stroke:#dbe6f2;stroke-width:1.2;rx:14}</style>
+<rect class="box" x="8" y="8" width="1084" height="414" rx="18"/>
+<text class="title" x="24" y="38">Report 2 ? Utilizzo Personale in Forza</text>
+<text class="sub" x="24" y="58">Barre positive = allocati ? barre negative = non allocati</text>
+<rect x="860" y="24" width="12" height="12" fill="#2f7de1" rx="2"/>
+<text class="legend" x="878" y="34">Allocati</text>
+<rect x="860" y="44" width="12" height="12" fill="#a75a5a" rx="2"/>
+<text class="legend" x="878" y="54">Non allocati</text>
+<line class="grid" x1="70" y1="350.6" x2="1075" y2="350.6"/>
+<text class="small" x="60" y="354.6" text-anchor="end">-92</text>
+<line class="grid" x1="70" y1="318.6" x2="1075" y2="318.6"/>
+<text class="small" x="60" y="322.6" text-anchor="end">-69</text>
+<line class="grid" x1="70" y1="286.6" x2="1075" y2="286.6"/>
+<text class="small" x="60" y="290.6" text-anchor="end">-46</text>
+<line class="grid" x1="70" y1="254.5" x2="1075" y2="254.5"/>
+<text class="small" x="60" y="258.5" text-anchor="end">-23</text>
+<line class="grid" x1="70" y1="222.5" x2="1075" y2="222.5"/>
+<line class="grid" x1="70" y1="190.5" x2="1075" y2="190.5"/>
+<text class="small" x="60" y="194.5" text-anchor="end">23</text>
+<line class="grid" x1="70" y1="158.4" x2="1075" y2="158.4"/>
+<text class="small" x="60" y="162.4" text-anchor="end">46</text>
+<line class="grid" x1="70" y1="126.4" x2="1075" y2="126.4"/>
+<text class="small" x="60" y="130.4" text-anchor="end">69</text>
+<line class="grid" x1="70" y1="94.4" x2="1075" y2="94.4"/>
+<text class="small" x="60" y="98.4" text-anchor="end">92</text>
+<line x1="70" y1="222.5" x2="1075" y2="222.5" stroke="#51657f" stroke-width="1.4"/>
+<rect x="96.4" y="94.4" width="72.9" height="128.1" fill="#2f7de1" rx="4"/>
+<rect x="96.4" y="222.5" width="72.9" height="13.9" fill="#a75a5a" rx="4"/>
+<text class="label" x="132.8" y="393" text-anchor="middle">W13</text>
+<text class="small" x="132.8" y="88.4" text-anchor="middle">92</text>
+<text class="small" x="132.8" y="250.4" text-anchor="middle">-10</text>
+<rect x="222.0" y="108.3" width="72.9" height="114.2" fill="#2f7de1" rx="4"/>
+<rect x="222.0" y="222.5" width="72.9" height="27.8" fill="#a75a5a" rx="4"/>
+<text class="label" x="258.4" y="393" text-anchor="middle">W14</text>
+<text class="small" x="258.4" y="102.3" text-anchor="middle">82</text>
+<text class="small" x="258.4" y="264.3" text-anchor="middle">-20</text>
+<rect x="347.6" y="102.8" width="72.9" height="119.7" fill="#2f7de1" rx="4"/>
+<rect x="347.6" y="222.5" width="72.9" height="19.5" fill="#a75a5a" rx="4"/>
+<text class="label" x="384.1" y="393" text-anchor="middle">W15</text>
+<text class="small" x="384.1" y="96.8" text-anchor="middle">86</text>
+<text class="small" x="384.1" y="256.0" text-anchor="middle">-14</text>
+<rect x="473.3" y="104.1" width="72.9" height="118.4" fill="#2f7de1" rx="4"/>
+<rect x="473.3" y="222.5" width="72.9" height="19.5" fill="#a75a5a" rx="4"/>
+<text class="label" x="509.7" y="393" text-anchor="middle">W16</text>
+<text class="small" x="509.7" y="98.1" text-anchor="middle">85</text>
+<text class="small" x="509.7" y="256.0" text-anchor="middle">-14</text>
+<rect x="598.9" y="104.1" width="72.9" height="118.4" fill="#2f7de1" rx="4"/>
+<rect x="598.9" y="222.5" width="72.9" height="19.5" fill="#a75a5a" rx="4"/>
+<text class="label" x="635.3" y="393" text-anchor="middle">W17</text>
+<text class="small" x="635.3" y="98.1" text-anchor="middle">85</text>
+<text class="small" x="635.3" y="256.0" text-anchor="middle">-14</text>
+<rect x="724.5" y="150.1" width="72.9" height="72.4" fill="#2f7de1" rx="4"/>
+<rect x="724.5" y="222.5" width="72.9" height="65.4" fill="#a75a5a" rx="4"/>
+<text class="label" x="760.9" y="393" text-anchor="middle">W18</text>
+<text class="small" x="760.9" y="144.1" text-anchor="middle">52</text>
+<text class="small" x="760.9" y="301.9" text-anchor="middle">-47</text>
+<rect x="850.1" y="161.2" width="72.9" height="61.3" fill="#2f7de1" rx="4"/>
+<rect x="850.1" y="222.5" width="72.9" height="69.6" fill="#a75a5a" rx="4"/>
+<text class="label" x="886.6" y="393" text-anchor="middle">W19</text>
+<text class="small" x="886.6" y="155.2" text-anchor="middle">44</text>
+<text class="small" x="886.6" y="306.1" text-anchor="middle">-50</text>
+<rect x="975.8" y="165.4" width="72.9" height="57.1" fill="#2f7de1" rx="4"/>
+<rect x="975.8" y="222.5" width="72.9" height="73.8" fill="#a75a5a" rx="4"/>
+<text class="label" x="1012.2" y="393" text-anchor="middle">W20</text>
+<text class="small" x="1012.2" y="159.4" text-anchor="middle">41</text>
+<text class="small" x="1012.2" y="310.3" text-anchor="middle">-53</text>
+</svg>

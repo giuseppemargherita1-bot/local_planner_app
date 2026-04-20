@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="430" viewBox="0 0 1100 430">
+<style>text{font-family:Segoe UI,Arial,sans-serif} .title{font-size:22px;font-weight:700;fill:#1b2b42} .sub{font-size:12px;fill:#607089} .axis{stroke:#9aa9bc;stroke-width:1} .grid{stroke:#e5ecf5;stroke-width:1} .label{font-size:12px;fill:#30435f} .small{font-size:11px;fill:#607089} .legend{font-size:12px;fill:#30435f} .box{fill:#fff;stroke:#dbe6f2;stroke-width:1.2;rx:14}</style>
+<rect class="box" x="8" y="8" width="1084" height="414" rx="18"/>
+<text class="title" x="24" y="38">Report 1 ? Fabbisogno vs Allocato</text>
+<text class="sub" x="24" y="58">Esempio reale: 421-26 (SITE) ? colonne in pila = allocati + mancanti</text>
+<rect x="860" y="24" width="12" height="12" fill="#22a06b" rx="2"/>
+<text class="legend" x="878" y="34">Allocati</text>
+<rect x="860" y="44" width="12" height="12" fill="#e05a47" rx="2"/>
+<text class="legend" x="878" y="54">Mancanti</text>
+<line class="grid" x1="70" y1="375.0" x2="1075" y2="375.0"/>
+<text class="small" x="60" y="379.0" text-anchor="end">0</text>
+<line class="grid" x1="70" y1="314.0" x2="1075" y2="314.0"/>
+<text class="small" x="60" y="318.0" text-anchor="end">3</text>
+<line class="grid" x1="70" y1="253.0" x2="1075" y2="253.0"/>
+<text class="small" x="60" y="257.0" text-anchor="end">6</text>
+<line class="grid" x1="70" y1="192.0" x2="1075" y2="192.0"/>
+<text class="small" x="60" y="196.0" text-anchor="end">10</text>
+<line class="grid" x1="70" y1="131.0" x2="1075" y2="131.0"/>
+<text class="small" x="60" y="135.0" text-anchor="end">13</text>
+<line class="grid" x1="70" y1="70.0" x2="1075" y2="70.0"/>
+<text class="small" x="60" y="74.0" text-anchor="end">16</text>
+<line class="axis" x1="70" y1="70" x2="70" y2="375"/>
+<line class="axis" x1="70" y1="375" x2="1075" y2="375"/>
+<rect x="96.4" y="279.7" width="72.9" height="95.3" fill="#22a06b" rx="4"/>
+<text class="label" x="132.8" y="393" text-anchor="middle">W13</text>
+<text class="small" x="132.8" y="273.7" text-anchor="middle">5</text>
+<rect x="222.0" y="279.7" width="72.9" height="95.3" fill="#22a06b" rx="4"/>
+<text class="label" x="258.4" y="393" text-anchor="middle">W14</text>
+<text class="small" x="258.4" y="273.7" text-anchor="middle">5</text>
+<rect x="347.6" y="241.6" width="72.9" height="133.4" fill="#22a06b" rx="4"/>
+<rect x="347.6" y="127.2" width="72.9" height="114.4" fill="#e05a47" rx="4"/>
+<text class="label" x="384.1" y="393" text-anchor="middle">W15</text>
+<text class="small" x="384.1" y="121.2" text-anchor="middle">13</text>
+<rect x="473.3" y="241.6" width="72.9" height="133.4" fill="#22a06b" rx="4"/>
+<rect x="473.3" y="89.1" width="72.9" height="152.5" fill="#e05a47" rx="4"/>
+<text class="label" x="509.7" y="393" text-anchor="middle">W16</text>
+<text class="small" x="509.7" y="83.1" text-anchor="middle">15</text>
+<rect x="598.9" y="222.5" width="72.9" height="152.5" fill="#22a06b" rx="4"/>
+<rect x="598.9" y="70.0" width="72.9" height="152.5" fill="#e05a47" rx="4"/>
+<text class="label" x="635.3" y="393" text-anchor="middle">W17</text>
+<text class="small" x="635.3" y="82.0" text-anchor="middle">16</text>
+<rect x="724.5" y="241.6" width="72.9" height="133.4" fill="#22a06b" rx="4"/>
+<rect x="724.5" y="89.1" width="72.9" height="152.5" fill="#e05a47" rx="4"/>
+<text class="label" x="760.9" y="393" text-anchor="middle">W18</text>
+<text class="small" x="760.9" y="83.1" text-anchor="middle">15</text>
+<rect x="850.1" y="317.8" width="72.9" height="57.2" fill="#22a06b" rx="4"/>
+<text class="label" x="886.6" y="393" text-anchor="middle">W19</text>
+<text class="small" x="886.6" y="311.8" text-anchor="middle">2</text>
+<rect x="975.8" y="375.0" width="72.9" height="0.0" fill="#22a06b" rx="4"/>
+<text class="label" x="1012.2" y="393" text-anchor="middle">W20</text>
+<text class="small" x="1012.2" y="369.0" text-anchor="middle">0</text>
+</svg>
