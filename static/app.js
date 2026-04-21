@@ -1255,6 +1255,34 @@ function warningLabelsForWeek(allocation, week) {
     });
 }
 
+function compactWarningCode(type = "") {
+  const raw = String(type || "").trim().toUpperCase();
+  if (!raw) return "";
+  if (raw.includes("MANSIONE") || raw.includes("FUORI")) return "NO-MANS";
+  if (raw.includes("INDISP")) return "IND";
+  if (raw.includes("NO FABB")) return "NO-FABB";
+  if (raw.includes("SOVRAPP")) return "OVER";
+  if (raw.includes("CONTRATTO") || raw.includes("CESSATO")) return "NA";
+  return raw.replace(/\s+/g, "-").slice(0, 16);
+}
+
+function warningCodesForAllocationRange(allocation, weekFrom, weekTo) {
+  const from = Number(weekFrom);
+  const to = Number(weekTo);
+  if (!Number.isFinite(from) || !Number.isFinite(to)) return [];
+  const rangeFrom = Math.min(from, to);
+  const rangeTo = Math.max(from, to);
+  const set = new Set();
+  (allocation?.warning_segments || []).forEach((seg) => {
+    const segFrom = Number(seg.week_from);
+    const segTo = Number(seg.week_to);
+    if (segFrom > rangeTo || segTo < rangeFrom) return;
+    const code = compactWarningCode(seg.type);
+    if (code) set.add(code);
+  });
+  return [...set];
+}
+
 function demandQtyForPlannerProjectWeek(projectCode, role, week) {
   const targetProject = normalizeProjectCode(projectCode);
   const targetRole = normalizeRoleKey(role);
@@ -1267,14 +1295,158 @@ function demandQtyForPlannerProjectWeek(projectCode, role, week) {
   }, 0);
 }
 
-function allocationWeightLabelForWeek(allocation, week) {
-  const weight = allocationEffectiveWeightForWeek(allocation, week);
-  if (Math.abs(weight - 0.5) < 0.001) return "1/2";
-  return "1:1";
+function formatRoleStatus(resource, role) {
+  if (!resource) return "NO-MANS";
+  const targetRole = String(role || "").trim();
+  if (!targetRole) return resourceHasAnyRole(resource) ? "OK" : "NO-MANS";
+  return roleMatches(resource, targetRole) ? "OK" : "NO-MANS";
+}
+
+function formatShortPersonName(fullName) {
+  const cleaned = String(fullName || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+  if (!cleaned) return "";
+  const parts = cleaned.split(" ").filter(Boolean);
+  if (parts.length < 2) return cleaned;
+  const firstName = parts[parts.length - 1];
+  const surname = parts.slice(0, -1).join(" ");
+  return `${surname} ${firstName.slice(0, 3)}`;
+}
+
+function formatShortRole(role) {
+  const raw = String(role || "").trim();
+  if (!raw) return "";
+  const key = normalizeRoleKey(raw);
+  const map = {
+    "SALDATORE TIG ELETTRODO": "SALD TIG",
+    "SALDATORE FILO": "SALD FILO",
+    "CAPO CANTIERE": "CAPO CANT",
+    "CARPENTIERE": "CARP",
+    "COIBENTATORE": "COIB",
+    "TUBISTA": "TUB",
+    "MONTATORE": "MONT",
+    "MECCANICO SERVICE": "MECC SERV",
+    "QUALITY CONTROL WELDING INSPECTOR": "QC/WI",
+    "GENERICO": "GEN",
+    "SOLLEVAMENTI": "SOLL",
+  };
+  if (map[key]) return map[key];
+  const tokens = key.split(" ").filter(Boolean);
+  if (!tokens.length) return raw.toUpperCase();
+  if (tokens.length === 1) return tokens[0].slice(0, 5);
+  return `${tokens[0].slice(0, 4)} ${tokens[1].slice(0, 4)}`.trim();
+}
+
+function formatAllocationWeightLabel(resource, allocation, weekFrom, weekTo) {
+  if (!resource) return "";
+  if (isExternalResource(resource)) return "EXT";
+  const fromRaw = Number(weekFrom ?? allocation?.week_from);
+  const toRaw = Number(weekTo ?? allocation?.week_to ?? fromRaw);
+  if (!Number.isFinite(fromRaw) || !Number.isFinite(toRaw)) return "";
+  const from = Math.min(fromRaw, toRaw);
+  const to = Math.max(fromRaw, toRaw);
+  if (!allocation) {
+    const conflicts = allocationConflict(resource.id, from, to);
+    if (conflicts.length === 0) return "";
+    if (conflicts.length === 1) return "1:1";
+    return "1/2";
+  }
+  let hasAny = false;
+  for (let week = from; week <= to; week += 1) {
+    const weight = allocationEffectiveWeightForWeek(allocation, week);
+    if (weight > 0) hasAny = true;
+    if (Math.abs(weight - 0.5) < 0.001) return "1/2";
+  }
+  return hasAny ? "1:1" : "";
+}
+
+function formatResourceCompactStatus(resource, role, weekFrom, weekTo) {
+  if (!resource) return "";
+  if (isExternalResource(resource)) return "EXT";
+  const fromRaw = Number(weekFrom);
+  const toRaw = Number(weekTo ?? weekFrom);
+  const hasRange = Number.isFinite(fromRaw) && Number.isFinite(toRaw);
+  const from = hasRange ? Math.min(fromRaw, toRaw) : null;
+  const to = hasRange ? Math.max(fromRaw, toRaw) : null;
+  if (!resourceActive(resource, hasRange ? from : null)) return "NA";
+  if (hasRange) {
+    const unavailable = unavailabilityConflict(resource.id, from, to);
+    if (unavailable.length > 0) return "IND";
+    const conflicts = allocationConflict(resource.id, from, to);
+    if (conflicts.length === 0) return "";
+    if (conflicts.length === 1) return "1:1";
+    if (conflicts.length === 2) return "1/2";
+    return "1/2";
+  }
+  return "";
+}
+
+function formatResourceDisplayLine(resource, options = {}) {
+  const {
+    role = "",
+    weekFrom = null,
+    weekTo = null,
+    allocation = null,
+    noFab = false,
+  } = options;
+  const name = formatShortPersonName(resource?.name || resource?.resource || "RISORSA");
+  const rawRole = String(role || allocation?.role || resource?.role1 || resource?.role2 || "").trim();
+  const shownRole = formatShortRole(rawRole);
+  const status = formatResourceCompactStatus(resource, rawRole, weekFrom, weekTo);
+  const weight = formatAllocationWeightLabel(resource, allocation, weekFrom, weekTo);
+  if (resource && isExternalResource(resource)) {
+    const extParts = [name];
+    if (shownRole) extParts.push(shownRole);
+    extParts.push("EXT");
+    if (noFab) extParts.push("NO-FABB");
+    return extParts.join(" | ");
+  }
+  const roleStatus = formatRoleStatus(resource, rawRole);
+  const parts = [name];
+  if (shownRole) parts.push(shownRole);
+  if (roleStatus === "NO-MANS") {
+    parts.push(roleStatus);
+  }
+  if (status && (status === "IND" || status === "NA")) {
+    parts.push(status);
+  }
+  const allocState = weight || (status === "1:1" || status === "1/2" ? status : "");
+  if (allocState && !parts.includes(allocState)) {
+    parts.push(allocState);
+  }
+  if (noFab) {
+    parts.push("NO-FABB");
+  }
+  return parts.join(" | ");
+}
+
+function compactLineTokens(text = "") {
+  return String(text || "")
+    .split("|")
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
+}
+
+function appendUniqueCompactCodes(baseLine, codes = []) {
+  const tokens = compactLineTokens(baseLine);
+  const used = new Set(tokens.map((t) => t.toUpperCase()));
+  const extras = [];
+  codes.forEach((code) => {
+    const token = String(code || "").trim();
+    if (!token) return;
+    const key = token.toUpperCase();
+    if (used.has(key)) return;
+    used.add(key);
+    extras.push(token);
+  });
+  return { line: tokens.join(" | "), extras };
 }
 
 function resourceWeekAllocationSegments(resource, week) {
   if (!resource) return [];
+  if (!resourceActive(resource, week)) return [];
   return state.allocations
     .filter((allocation) =>
       Number(allocation.resource_id) === Number(resource.id) &&
@@ -1283,8 +1455,11 @@ function resourceWeekAllocationSegments(resource, week) {
     )
     .sort((a, b) => String(a.project || "").localeCompare(String(b.project || "")) || String(a.role || "").localeCompare(String(b.role || "")))
     .map((allocation) => {
-      const mansione = roleMatches(resource, allocation.role) ? "OK.MANS" : "NO.MANS";
-      return `${allocation.project}; ${allocation.role}-${mansione}; ${allocationWeightLabelForWeek(allocation, week)}`;
+      const roleStatus = formatRoleStatus(resource, allocation.role);
+      const weight = formatAllocationWeightLabel(resource, allocation, week, week);
+      const parts = [String(allocation.project || "").trim(), formatShortRole(allocation.role || ""), roleStatus];
+      if (weight) parts.push(weight);
+      return parts.filter(Boolean).join(" | ");
     });
 }
 
@@ -1296,17 +1471,42 @@ function mansioneHoverText(resource, allocation, weekFrom, weekTo) {
   const targetProject = projectMeta.project || allocation?.project || "";
   const targetRole = allocation?.role || "";
   const segmentSet = new Set();
+  const allowNoFabTag = from === to;
   let noFab = false;
+  let hasActiveWeeks = false;
   for (let week = from; week <= to; week += 1) {
+    if (resource && !resourceActive(resource, week)) continue;
+    hasActiveWeeks = true;
     resourceWeekAllocationSegments(resource, week).forEach((segment) => segmentSet.add(segment));
-    if (demandQtyForPlannerProjectWeek(targetProject, targetRole, week) <= 0) {
+    if (allowNoFabTag && demandQtyForPlannerProjectWeek(targetProject, targetRole, week) <= 0) {
       noFab = true;
     }
   }
+  if (!hasActiveWeeks) return "";
   const segments = [...segmentSet];
-  const name = resource?.name || allocation?.resource || "RISORSA";
-  const detail = segments.length ? `${name}: ${segments.join(" | ")}` : `${name}: ${targetProject}; ${targetRole}; 1:1`;
-  return `${range ? `${range} | ` : ""}${detail}${noFab ? " (NO FABB)" : ""}`;
+  const name = formatShortPersonName(resource?.name || allocation?.resource || "RISORSA");
+  const fallback = formatResourceDisplayLine(resource, {
+    role: targetRole,
+    weekFrom: from || null,
+    weekTo: to || from || null,
+    allocation,
+  });
+  const shortSegments = segments
+    .map((segment) =>
+      segment
+        .split("|")
+        .map((part) => String(part || "").trim())
+        .filter(Boolean)
+        .join("; ")
+    )
+    .filter(Boolean);
+  const visibleSegments = shortSegments.slice(0, 2);
+  if (shortSegments.length > 2) {
+    visibleSegments.push(`... +${shortSegments.length - 2}`);
+  }
+  const detail = shortSegments.length ? `${name} | ${visibleSegments.join(" | ")}` : fallback;
+  const withNoFab = appendUniqueCompactCodes(detail, noFab ? ["NO-FABB"] : []);
+  return `${range ? `${range} | ` : ""}${[withNoFab.line, ...withNoFab.extras].filter(Boolean).join(" | ")}`;
 }
 
 function computeCellBadge({ indisp = false, noFab = false, fuoriMansione = false, external = false } = {}) {
@@ -1363,6 +1563,8 @@ function plannerCellWarningText(projectId, role, week, projectCode = "") {
   const allocations = state.allocations.filter(
     (a) => {
       const meta = plannerProjectMeta(a.project_id, a.project);
+      const resource = state.resources.find((r) => Number(r.id) === Number(a.resource_id));
+      if (!resource || !resourceActive(resource, week)) return false;
       return normalizeProjectCode(meta.project) === targetProject &&
         normalizeRoleKey(a.role) === normalizeRoleKey(role) &&
         Number(a.week_from) <= Number(week) &&
@@ -1384,18 +1586,28 @@ function plannerCellWarningText(projectId, role, week, projectCode = "") {
     }
     byResource.get(key).contribution += allocationEffectiveWeightForWeek(allocation, week);
   });
-  const entries = [...byResource.values()].sort((a, b) => a.name.localeCompare(b.name));
+  const entries = [...byResource.values()].sort((a, b) => {
+    const contributionDelta = Number(b.contribution || 0) - Number(a.contribution || 0);
+    if (Math.abs(contributionDelta) > 0.0001) return contributionDelta;
+    return a.name.localeCompare(b.name);
+  });
   let covered = 0;
   return entries
     .map((entry) => {
       const before = covered;
       covered += Number(entry.contribution || 0);
-      const segments = resourceWeekAllocationSegments(entry.resource, week);
-      const core = segments.length
-        ? `${entry.name}: ${segments.join(" | ")}`
-        : `${entry.name}: ${projectCode || targetProject}; ${role}-NO.MANS; 1:1`;
+      const alloc = allocations.find((a) => Number(a.resource_id) === Number(entry.resource?.id));
+      const core = entry.resource
+        ? formatResourceDisplayLine(entry.resource, {
+            role,
+            weekFrom: week,
+            weekTo: week,
+            allocation: alloc || null,
+          })
+        : `${formatShortPersonName(entry.name)} | ${formatShortRole(role)} | NO-MANS`;
       const noFab = Number(required || 0) <= 0 || before >= Number(required || 0);
-      return noFab ? `${core} (NO FABB)` : core;
+      const packed = appendUniqueCompactCodes(core, noFab ? ["NO-FABB"] : []);
+      return [packed.line, ...packed.extras].filter(Boolean).join(" | ");
     })
     .join(" || ");
 }
@@ -2105,13 +2317,14 @@ function computePlannerRows(projectFilter = "", roleFilter = "", includeZeroDema
         allocatedDisplay: formatAllocatedDisplay(internalAllocated, externalAllocated),
         residual: Math.max(req - allocated, 0),
         names: allocs.map((a) => {
-          const hasFuoriMansione = warningLabelsForWeek(a, week).some((w) =>
-            String(w || "").toUpperCase().includes("FUORI MANSIONE")
-          );
-          if (hasFuoriMansione) {
-            return `${a.resource} (fuori mansione)`;
-          }
-          return a.resource;
+          const resource = state.resources.find((r) => Number(r.id) === Number(a.resource_id));
+          if (!resource) return `${formatShortPersonName(a.resource)} | ${formatShortRole(combo.role)} | 1:1`;
+          return formatResourceDisplayLine(resource, {
+            role: combo.role,
+            weekFrom: week,
+            weekTo: week,
+            allocation: a,
+          });
         }),
       };
     });
@@ -2674,7 +2887,7 @@ function updateAssignModeUi() {
   }
   if (assignResource) {
     assignResource.multiple = !useExt;
-    assignResource.size = useExt ? 6 : 8;
+    assignResource.size = useExt ? 12 : 15;
   }
   if (markUnavailableBtn) {
     markUnavailableBtn.disabled = useExt;
@@ -2717,8 +2930,6 @@ function renderAssignResourceOptions(preselectedId = null) {
     updateAssignModeUi();
     scopeResources = state.resources.filter((r) => !isExternalResource(r));
   }
-  console.log("renderAssignResourceOptions selectedTarget", selectedTarget);
-  console.log("renderAssignResourceOptions week", weekFrom ?? null);
   const selectedSet = new Set(
     (preselectedId !== null && preselectedId !== undefined ? [preselectedId] : selectedAssignResourceIds()).map((id) =>
       Number(id)
@@ -2733,15 +2944,6 @@ function renderAssignResourceOptions(preselectedId = null) {
       const hasRole = resourceHasAnyRole(r);
       const roleOk = !role || roleMatches(r, role);
       const active = resourceActive(r, hasRange ? weekFrom : null);
-      const labels = [];
-      if (isExt) labels.push("EXT 1:1");
-      if (!hasRole) labels.push("mansione mancante");
-      if (!roleOk) labels.push("fuori mansione");
-      if (!active) labels.push("non attivo");
-      if (unavailable.length > 0) labels.push("INDISP");
-      if (!isExt && conflict.length === 1) labels.push("occupato");
-      if (!isExt && conflict.length === 2) labels.push("doppia allocazione");
-      const suffix = labels.length ? ` | ${labels.join(", ")}` : "";
       const sel = selectedSet.has(Number(r.id)) ? "selected" : "";
       let optionColor = "#111a2a";
       let optionWeight = "700";
@@ -2758,7 +2960,18 @@ function renderAssignResourceOptions(preselectedId = null) {
         optionColor = "#1f7fd6";
         optionWeight = "700";
       }
-      return `<option value="${r.id}" ${sel} style="color:${optionColor};font-weight:${optionWeight};">${escapeHtml(r.name)} | ${escapeHtml(r.role1 || "")}${escapeHtml(suffix)}</option>`;
+      const displayLine = formatResourceDisplayLine(r, {
+        role,
+        weekFrom,
+        weekTo,
+      });
+      const existingCodes = new Set(displayLine.split("|").map((v) => String(v || "").trim()).filter(Boolean));
+      const extraCodes = [];
+      if ((!hasRole || !roleOk) && !existingCodes.has("NO-MANS")) extraCodes.push("NO-MANS");
+      if (!active && !existingCodes.has("NA")) extraCodes.push("NA");
+      if (unavailable.length > 0 && !existingCodes.has("IND")) extraCodes.push("IND");
+      const suffix = extraCodes.length ? ` | ${extraCodes.join(" | ")}` : "";
+      return `<option value="${r.id}" ${sel} style="color:${optionColor};font-weight:${optionWeight};">${escapeHtml(displayLine)}${escapeHtml(suffix)}</option>`;
     })
     .join("");
   assignResource.innerHTML = options || `<option value="">Nessuna risorsa disponibile</option>`;
@@ -2784,23 +2997,20 @@ function renderResourcePool() {
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((r) => {
       const cls = resourceCardClass(r, weekFrom, weekTo, role);
-      const conflicts = weekFrom !== null && weekTo !== null ? allocationConflict(r.id, weekFrom, weekTo) : [];
-      const unavailable = weekFrom !== null && weekTo !== null ? unavailabilityConflict(r.id, weekFrom, weekTo) : [];
-      const external = isExternalResource(r);
-      const note = unavailable.length > 0
-        ? `INDISP W${unavailable[0].week_from}-W${unavailable[0].week_to}`
-        : !external && conflicts.length >= 2
-          ? `Occupato su ${conflicts[0].project} W${conflicts[0].week_from}-W${conflicts[0].week_to}`
-          : !external && conflicts.length === 1
-            ? `Parziale su ${conflicts[0].project} W${conflicts[0].week_from}-W${conflicts[0].week_to}`
-            : external
-              ? "Risorsa esterna 1:1"
-            : r.base_location || r.level || "";
+      const displayLine = formatResourceDisplayLine(r, {
+        role,
+        weekFrom,
+        weekTo,
+      });
+      const note = displayLine;
+      const lineParts = displayLine.split(" | ");
+      const head = lineParts.shift() || r.name || "";
+      const meta = lineParts.join(" | ");
       const statusClass = cls === "free" ? "available" : cls;
       return `
         <div class="resource-line ${statusClass}" draggable="true" data-resource-id="${r.id}" title="${escapeHtml(note)}">
-          <span class="resource-line-name">${escapeHtml(r.name)}</span>
-          <span class="resource-line-meta">${escapeHtml(r.role1 || "")}${r.role2 ? ` / ${escapeHtml(r.role2)}` : ""}${note ? ` | ${escapeHtml(note)}` : ""}</span>
+          <span class="resource-line-name">${escapeHtml(head)}</span>
+          <span class="resource-line-meta">${escapeHtml(meta)}</span>
         </div>
       `;
     })
@@ -2842,27 +3052,36 @@ function renderSelectionAllocations() {
   selectedAllocationIds = new Set([...selectedAllocationIds].filter((id) => visibleIds.has(Number(id))));
 
   function contextualWarnings(allocation, viewFrom, viewTo) {
-    return (allocation.warning_segments || [])
-      .filter((seg) => Number(seg.week_from) <= viewTo && Number(seg.week_to) >= viewFrom)
-      .map((seg) => {
-        const segFrom = Math.max(viewFrom, Number(seg.week_from));
-        const segTo = Math.min(viewTo, Number(seg.week_to));
-        if (segFrom === Number(allocation.week_from) && segTo === Number(allocation.week_to)) {
-          return seg.type;
-        }
-        return `${seg.type} W${segFrom}${segTo > segFrom ? `-W${segTo}` : ""}`;
-      });
+    return warningCodesForAllocationRange(allocation, viewFrom, viewTo);
   }
 
   selectionAllocations.innerHTML = rows.length
     ? rows
         .map(
-          (a) => `
+          (a) => {
+            const resource = state.resources.find((r) => Number(r.id) === Number(a.resource_id));
+            const warnings = contextualWarnings(a, wf, wt);
+            const line = resource
+              ? formatResourceDisplayLine(resource, {
+                  role: a.role,
+                  weekFrom: wf,
+                  weekTo: wt,
+                  allocation: a,
+                })
+              : `${formatShortPersonName(a.resource)} | ${formatShortRole(a.role)}`;
+            const packed = appendUniqueCompactCodes(line, warnings);
+            const info = [
+              packed.line,
+              `W${a.week_from}${Number(a.week_to) !== Number(a.week_from) ? `-W${a.week_to}` : ""}`,
+              ...packed.extras,
+            ].filter(Boolean);
+            return `
             <div class="selection-item ${selectedAllocationIds.has(Number(a.id)) ? "is-selected" : ""}" data-allocation-id="${a.id}">
-              <span class="selection-line">${escapeHtml(a.resource)} | ${escapeHtml(a.role)} | W${a.week_from}-W${a.week_to}${contextualWarnings(a, wf, wt).length ? ` | ${escapeHtml(contextualWarnings(a, wf, wt).join(", "))}` : ""}</span>
+              <span class="selection-line">${escapeHtml(info.join(" | "))}</span>
               <button class="cell-btn danger" data-del-allocation="${a.id}">X</button>
             </div>
           `
+          }
         )
         .join("")
     : `<div class="empty-box">Nessuna allocazione nel periodo selezionato.</div>`;
@@ -4828,9 +5047,6 @@ function renderTimeline() {
         .map((a) => {
           const colors = colorFromText(a.project || "");
           const warnings = (a.warning_segments || []).map((w) => w.type).join(" ").toUpperCase();
-          const warningText = (a.warning_segments || [])
-            .map((w) => `${w.type} W${w.week_from}${Number(w.week_to) > Number(w.week_from) ? `-W${w.week_to}` : ""}`)
-            .join(", ");
           let border = colors.border;
           let className = "bar-normal";
           if (warnings.includes("CESSATO")) {
@@ -4843,15 +5059,15 @@ function renderTimeline() {
           const taskClass = allocationHasDoubleAllocation(a) ? "task-bar double-allocation" : "task-bar";
           const resource = state.resources.find((r) => Number(r.id) === Number(a.resource_id));
           const mansioneText = mansioneHoverText(resource, a, a.week_from, a.week_to);
+          const warningCodes = mansioneText ? warningCodesForAllocationRange(a, a.week_from, a.week_to) : [];
+          const compactTitle = [mansioneText, ...warningCodes].filter(Boolean).join(" | ");
           return {
             id: `alloc-${a.id}`,
             group: `project-${a.project_id}`,
             content: `<div class="${taskClass}" data-allocation-id="${a.id}" data-resource-id="${a.resource_id}" data-week="${a.week_from}" data-project="${escapeHtml(a.project || "")}">${escapeHtml(a.resource || "")}</div>`,
             start: startOfWeek(a.week_from),
             end: startOfWeek(Math.min(53, a.week_to + 1)),
-            title: escapeHtml(
-              `${a.resource} | ${a.project} | ${mansioneText}${warningText ? ` | ${warningText}` : ""}`
-            ),
+            title: escapeHtml(compactTitle),
             className,
             style: `background:${colors.bg}; border:2px solid ${border}; color:#fff;`,
           };
@@ -4872,9 +5088,6 @@ function renderTimeline() {
         .map((a) => {
           const colors = colorFromText(a.project || "");
           const warnings = (a.warning_segments || []).map((w) => w.type).join(" ").toUpperCase();
-          const warningText = (a.warning_segments || [])
-            .map((w) => `${w.type} W${w.week_from}${Number(w.week_to) > Number(w.week_from) ? `-W${w.week_to}` : ""}`)
-            .join(", ");
           let border = colors.border;
           let className = "bar-normal";
           if (warnings.includes("CESSATO")) {
@@ -4887,15 +5100,15 @@ function renderTimeline() {
           const taskClass = allocationHasDoubleAllocation(a) ? "task-bar double-allocation" : "task-bar";
           const resource = state.resources.find((r) => Number(r.id) === Number(a.resource_id));
           const mansioneText = mansioneHoverText(resource, a, a.week_from, a.week_to);
+          const warningCodes = mansioneText ? warningCodesForAllocationRange(a, a.week_from, a.week_to) : [];
+          const compactTitle = [mansioneText, ...warningCodes].filter(Boolean).join(" | ");
           return {
             id: a.id,
             group: a.resource_id,
             content: `<div class="${taskClass}" data-allocation-id="${a.id}" data-resource-id="${a.resource_id}" data-week="${a.week_from}" data-project="${escapeHtml(a.project || "")}">${escapeHtml(a.project)}</div>`,
             start: startOfWeek(a.week_from),
             end: startOfWeek(Math.min(53, a.week_to + 1)),
-            title: escapeHtml(
-              `${a.resource} | ${a.project} | ${mansioneText}${warningText ? ` | ${warningText}` : ""}`
-            ),
+            title: escapeHtml(compactTitle),
             className,
             style: `background:${colors.bg}; border:2px solid ${border}; color:#fff;`,
           };
@@ -5012,16 +5225,17 @@ function renderTimelineFallback() {
           if (unav) {
             const badge = computeCellBadge({ indisp: true });
             return `<td class="gantt-fallback-indisp gantt-cell-action" data-kind="unavailability" data-unavailability-id="${unav.id}" data-resource-id="${r.id}" data-week="${week}" title="${escapeHtml(
-              `${r.name} | INDISP | W${unav.week_from}-W${unav.week_to}`
+              `${formatShortPersonName(r.name)} | ${formatShortRole(r.role1 || "")} | IND | W${unav.week_from}${Number(unav.week_to) > Number(unav.week_from) ? `-W${unav.week_to}` : ""}`
             )}">IND${cellBadgeHtml(badge)}</td>`;
           }
           if (resourceActive(r, week)) {
+            const availableTitle = `${formatResourceDisplayLine(r, { role: r.role1 || "", weekFrom: week, weekTo: week })} | W${week}`;
             return `<td class="gantt-fallback-available gantt-cell-action" data-kind="available" data-resource-id="${r.id}" data-week="${week}" title="${escapeHtml(
-              `${r.name} disponibile in W${week}`
+              availableTitle
             )}"></td>`;
           }
           if (endWeek !== null && endWeek > 0 && endWeek < 999 && week > endWeek && week <= endWeek + 4) {
-            return `<td class="gantt-fallback-ended" title="${escapeHtml(`${r.name} | contratto concluso prima di W${week}`)}"></td>`;
+            return `<td class="gantt-fallback-ended" title="${escapeHtml(`${formatShortPersonName(r.name)} | ${formatShortRole(r.role1 || "")} | NA | W${week}`)}"></td>`;
           }
           return `<td class="gantt-fallback-empty" data-resource-id="${r.id}" data-week="${week}"></td>`;
         }
@@ -5047,14 +5261,10 @@ function renderTimelineFallback() {
         const surplusClass = surplus ? "gantt-fallback-surplus" : "";
         const shortLabel = escapeHtml((active.project || "").slice(0, 10));
         const mansioneText = mansioneHoverText(r, active, active.week_from, active.week_to);
-        const reasonParts = [];
-        if (warnings.includes("FUORI MANSIONE")) reasonParts.push("FUORI MANSIONE");
-        if (surplus) reasonParts.push("NO FABB");
-        if (isExternalResource(r)) reasonParts.push("EXT");
-        const reasonText = reasonParts.length ? ` | ${reasonParts.join(" - ")}` : "";
-        const title = `${r.name}${reasonText} | ${active.project} | ${mansioneText}${
-          warningLabels.length ? ` | ${warningLabels.join(", ")}` : ""
-        }`;
+        const warningCodes = mansioneText ? warningLabels.map((w) => compactWarningCode(w)).filter(Boolean) : [];
+        if (mansioneText && surplus) warningCodes.push("NO-FABB");
+        const uniqueCodes = [...new Set(warningCodes)];
+        const title = [mansioneText, ...uniqueCodes].filter(Boolean).join(" | ");
         return `<td class="gantt-fallback-fill gantt-cell-action ${extraClass} ${surplusClass} ${doubleClass}" draggable="true" data-kind="allocation" data-allocation-id="${active.id}" data-resource-id="${r.id}" data-week="${week}" style="--fill-bg:${colors.bg}; --fill-border:${colors.border}; background:${colors.bg}; border-color:${colors.border}" title="${escapeHtml(
           title
         )}">${shortLabel}${cellBadgeHtml(badge)}</td>`;
