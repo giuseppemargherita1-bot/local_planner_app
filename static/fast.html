@@ -5,35 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Manpower Planner FAST</title>
   <style>
-    html, body {
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      overflow: hidden;
-      background: #f4f7fb;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    #fastBanner {
-      position: fixed;
-      top: 10px;
-      right: 14px;
-      z-index: 10;
-      padding: 7px 10px;
-      border-radius: 999px;
-      background: rgba(17, 24, 39, 0.88);
-      color: #fff;
-      font-size: 12px;
-      font-weight: 700;
-      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.22);
-      pointer-events: none;
-    }
-    #plannerFrame {
-      width: 100%;
-      height: 100%;
-      border: 0;
-      display: block;
-      background: #fff;
-    }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #f4f7fb; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    #fastBanner { position: fixed; top: 10px; right: 14px; z-index: 10; padding: 7px 10px; border-radius: 999px; background: rgba(17, 24, 39, 0.88); color: #fff; font-size: 12px; font-weight: 700; box-shadow: 0 8px 22px rgba(15, 23, 42, 0.22); pointer-events: none; }
+    #plannerFrame { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
   </style>
 </head>
 <body>
@@ -41,118 +15,57 @@
   <iframe id="plannerFrame" src="/index.html" title="Manpower Planner FAST"></iframe>
   <script>
     (function () {
-      const ACTION_BUTTON_IDS = new Set([
-        "assignSaveBtn",
-        "assignClearBtn",
-        "markUnavailableBtn",
-        "demandSaveBtn",
-        "projectAdminSaveBtn",
-        "projectDemandSaveBtn",
-        "resourceSaveAllBtn",
-        "ganttActionSaveBtn",
-        "ganttActionUnassignBtn",
-        "ganttActionDeleteBtn",
-        "restoreBackupBtn",
-      ]);
-
       const frame = document.getElementById("plannerFrame");
       const banner = document.getElementById("fastBanner");
-
-      function setBanner(text) {
-        banner.textContent = text;
-      }
+      function setBanner(text) { banner.textContent = text; }
 
       function patchPlanner(win) {
         if (!win || win.__specFastEnginePatched) return true;
         const doc = win.document;
         if (!doc || !doc.body) return false;
-
         const originalLoadAll = win.loadAll;
         if (typeof originalLoadAll !== "function") return false;
 
         win.__specFastEnginePatched = true;
-        let actionModeUntil = 0;
         let refreshTimer = null;
         let refreshRunning = false;
         let refreshQueued = false;
         let lastRequestedAt = 0;
 
-        function markActionWindow() {
-          actionModeUntil = Date.now() + 2500;
-        }
-
         function requestIdle(fn) {
-          if (typeof win.requestIdleCallback === "function") {
-            win.requestIdleCallback(fn, { timeout: 1400 });
-          } else {
-            win.setTimeout(fn, 0);
-          }
+          if (typeof win.requestIdleCallback === "function") win.requestIdleCallback(fn, { timeout: 1400 });
+          else win.setTimeout(fn, 0);
         }
 
         async function runFullRefresh(preserveView) {
-          if (refreshRunning) {
-            refreshQueued = true;
-            return null;
-          }
+          if (refreshRunning) { refreshQueued = true; return null; }
           refreshRunning = true;
-          try {
-            if (typeof win.setStatus === "function") {
-              win.setStatus("Aggiornamento dati in coda...");
-            }
-            return await originalLoadAll.call(win, preserveView);
-          } finally {
+          try { return await originalLoadAll.call(win, preserveView); }
+          finally {
             refreshRunning = false;
-            if (refreshQueued) {
-              refreshQueued = false;
-              scheduleRefresh(350);
-            }
+            if (refreshQueued) { refreshQueued = false; scheduleRefresh(350); }
           }
         }
 
         function scheduleRefresh(delayMs) {
           win.clearTimeout(refreshTimer);
-          refreshTimer = win.setTimeout(() => {
-            requestIdle(() => runFullRefresh(true));
-          }, delayMs);
+          refreshTimer = win.setTimeout(() => requestIdle(() => runFullRefresh(true)), delayMs);
         }
 
         win.loadAll = async function patchedLoadAll(preserveView) {
           const now = Date.now();
-          const isSmallActionRefresh = preserveView === true && now < actionModeUntil;
           const isDuplicateRefresh = preserveView === true && now - lastRequestedAt < 650;
           lastRequestedAt = now;
-
-          if (isSmallActionRefresh || isDuplicateRefresh) {
-            scheduleRefresh(isSmallActionRefresh ? 900 : 450);
-            if (typeof win.setStatus === "function") {
-              win.setStatus("Salvato. Refresh ottimizzato in corso...");
-            }
+          if (isDuplicateRefresh) {
+            scheduleRefresh(450);
+            if (typeof win.setStatus === "function") win.setStatus("Aggiornamento ottimizzato in corso...");
             return null;
           }
           return originalLoadAll.apply(this, arguments);
         };
 
-        doc.addEventListener("click", function (event) {
-          const target = event.target && event.target.closest
-            ? event.target.closest("button,[data-del-allocation],[data-allocation-id]")
-            : null;
-          if (!target) return;
-          if (ACTION_BUTTON_IDS.has(target.id) || target.hasAttribute("data-del-allocation")) {
-            markActionWindow();
-          }
-        }, true);
-
-        doc.addEventListener("keydown", function (event) {
-          const key = String(event.key || "").toLowerCase();
-          if ((event.ctrlKey || event.metaKey) && key === "z") {
-            markActionWindow();
-          }
-        }, true);
-
         setBanner("FAST ENGINE ATTIVO");
-        if (typeof win.setStatus === "function") {
-          win.setStatus("Fast engine attivo: refresh ridotti dopo le modifiche.");
-        }
+        if (typeof win.setStatus === "function") win.setStatus("Fast engine attivo. Lista risorse non filtrata, come V1.");
         return true;
       }
 
@@ -161,20 +74,11 @@
         const timer = setInterval(() => {
           attempts += 1;
           try {
-            if (patchPlanner(frame.contentWindow)) {
-              clearInterval(timer);
-            } else if (attempts > 60) {
-              clearInterval(timer);
-              setBanner("FAST ENGINE NON AGGANCIATO");
-            }
-          } catch (err) {
-            clearInterval(timer);
-            setBanner("FAST ENGINE ERRORE");
-            console.error("Fast engine error", err);
-          }
+            if (patchPlanner(frame.contentWindow)) clearInterval(timer);
+            else if (attempts > 60) { clearInterval(timer); setBanner("FAST ENGINE NON AGGANCIATO"); }
+          } catch (err) { clearInterval(timer); setBanner("FAST ENGINE ERRORE"); console.error("Fast engine error", err); }
         }, 250);
       }
-
       frame.addEventListener("load", installWhenReady);
     })();
   </script>
